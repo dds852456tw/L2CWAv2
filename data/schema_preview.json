@@ -1,0 +1,108 @@
+{
+  "meta": {
+    "dataset_id": "O-A0003-001",
+    "fetched_at": "2026-09-23T11:30:40.427340Z",
+    "total_valid": 347,
+    "schema_fields": [
+      "station_id",
+      "station_name",
+      "latitude",
+      "longitude",
+      "air_temperature",
+      "obs_time",
+      "fetched_at"
+    ]
+  },
+  "sample_records": [
+    {
+      "station_id": "466940",
+      "station_name": "基隆",
+      "latitude": 25.133314,
+      "longitude": 121.740475,
+      "air_temperature": 26.8,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425357Z"
+    },
+    {
+      "station_id": "466900",
+      "station_name": "淡水",
+      "latitude": 25.164889,
+      "longitude": 121.448906,
+      "air_temperature": 25.2,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425371Z"
+    },
+    {
+      "station_id": "466881",
+      "station_name": "新北",
+      "latitude": 24.959207,
+      "longitude": 121.525196,
+      "air_temperature": 25.5,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425376Z"
+    },
+    {
+      "station_id": "466930",
+      "station_name": "陽明山",
+      "latitude": 25.162078,
+      "longitude": 121.544547,
+      "air_temperature": 21.6,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425379Z"
+    },
+    {
+      "station_id": "466910",
+      "station_name": "鞍部",
+      "latitude": 25.182586,
+      "longitude": 121.529731,
+      "air_temperature": 19.5,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425383Z"
+    },
+    {
+      "station_id": "467571",
+      "station_name": "新竹",
+      "latitude": 24.828575,
+      "longitude": 121.01445,
+      "air_temperature": 26.8,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425387Z"
+    },
+    {
+      "station_id": "467490",
+      "station_name": "臺中",
+      "latitude": 24.145736,
+      "longitude": 120.684075,
+      "air_temperature": 28.0,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425390Z"
+    },
+    {
+      "station_id": "467350",
+      "station_name": "澎湖",
+      "latitude": 23.565503,
+      "longitude": 119.563094,
+      "air_temperature": 27.3,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425394Z"
+    },
+    {
+      "station_id": "467650",
+      "station_name": "日月潭",
+      "latitude": 23.881325,
+      "longitude": 120.90805,
+      "air_temperature": 21.3,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425397Z"
+    },
+    {
+      "station_id": "467530",
+      "station_name": "阿里山",
+      "latitude": 23.508208,
+      "longitude": 120.813242,
+      "air_temperature": 12.4,
+      "obs_time": "2026-09-23T19:20:00+08:00",
+      "fetched_at": "2026-09-23T11:30:40.425400Z"
+    }
+  ]
+}

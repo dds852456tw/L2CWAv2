@@ -1,0 +1,25 @@
+# Python 套件依賴
+# 使用 pip install -r requirements.txt 安裝
+
+# HTTP 請求
+requests>=2.31.0
+
+# 資料處理
+pandas>=2.0.0
+
+# Streamlit 前端
+streamlit>=1.28.0
+streamlit-folium>=0.15.0
+folium>=0.15.0
+
+# LINE Bot SDK
+line-bot-sdk>=3.5.0
+
+# Web 框架（LINE Bot Webhook）
+flask>=3.0.0
+
+# 環境變數管理
+python-dotenv>=1.0.0
+
+# 其他工具
+python-dateutil>=2.8.0
