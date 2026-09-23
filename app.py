@@ -31,6 +31,9 @@ from src.cwa_service import (
     get_clean_forecast_data,
     fetch_weather_warnings,
     get_radar_tile_url,
+    get_clothing_advice,
+    calculate_apparent_temp,
+    wind_deg_to_compass,
     REGION_COORDS,
 )
 from src.db_service import (
@@ -709,6 +712,41 @@ with tab_forecast:
         if not df_region.empty:
             df_region["溫差"] = (df_region["maxT"] - df_region["minT"]).round(1)
             df_region["日期簡稱"] = df_region["dataDate"].apply(lambda x: x[5:])
+
+            # 👔 智慧生活穿著與外出裝備建議
+            today_row = df_region.iloc[0]
+            advice = get_clothing_advice(today_row["minT"], today_row["maxT"])
+            st.markdown(f"""
+            <div style="background:linear-gradient(145deg, #131A26, #1A2332);border:1px solid #233146;
+                        border-radius:12px;padding:16px 20px;margin-bottom:20px;box-shadow:0 4px 16px rgba(0,0,0,0.3);">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;gap:8px;">
+                    <div style="font-size:1.15rem;font-weight:700;color:#F0F6FC;">
+                        👔 【{selected_region}】今日智慧穿著與生活建議
+                    </div>
+                    <div style="background:{advice['badge_color']}22;color:{advice['badge_color']};
+                                border:1px solid {advice['badge_color']}55;padding:4px 12px;border-radius:6px;font-weight:700;font-size:0.85rem;">
+                        體感：{advice['level']} ({advice['avg_t']}°C)
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:12px;font-size:0.88rem;">
+                    <div style="background:#0D111A;padding:10px 14px;border-radius:8px;border:1px solid #202736;">
+                        <b style="color:#8B949E;">👕 上衣搭配：</b><br><span style="color:#FFF;">{advice['top']}</span>
+                    </div>
+                    <div style="background:#0D111A;padding:10px 14px;border-radius:8px;border:1px solid #202736;">
+                        <b style="color:#8B949E;">🧥 外套推薦：</b><br><span style="color:#FFF;">{advice['outer']}</span>
+                    </div>
+                    <div style="background:#0D111A;padding:10px 14px;border-radius:8px;border:1px solid #202736;">
+                        <b style="color:#8B949E;">👖 下著鞋款：</b><br><span style="color:#FFF;">{advice['bottom']}</span>
+                    </div>
+                    <div style="background:#0D111A;padding:10px 14px;border-radius:8px;border:1px solid #202736;">
+                        <b style="color:#8B949E;">🧢 出門配件：</b><br><span style="color:#FFF;">{advice['accessory']}</span>
+                    </div>
+                </div>
+                <div style="margin-top:12px;font-size:0.86rem;color:#38BDF8;">
+                    🧅 <b>溫差穿搭提醒：</b> {advice['temp_diff_tip']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
             chart_col, table_col = st.columns([3, 2])
 

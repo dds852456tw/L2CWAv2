@@ -360,6 +360,118 @@ def get_clean_forecast_data() -> list:
     return results
 
 
+# ── CWA 氣象數值擴充與生活穿搭建議 ──────────────────────────────────────────
+def calculate_apparent_temp(temp: float, humidity: float, wind_speed: float) -> float:
+    """計算中央氣象署 CWA 體感溫度 (Apparent Temperature)。"""
+    try:
+        import math
+        e = (humidity / 100.0) * 6.105 * math.exp((17.27 * temp) / (237.7 + temp))
+        at = temp + 0.33 * e - 0.70 * wind_speed - 4.00
+        return round(at, 1)
+    except Exception:
+        return round(temp, 1)
+
+
+def wind_deg_to_compass(deg: float) -> str:
+    """將風向角度轉換為 16 方位角文字。"""
+    try:
+        deg = float(deg)
+        if deg < 0 or deg > 360:
+            return "靜風"
+        directions = [
+            "北", "北北東", "東北", "東北東", "東", "東南東", "東南", "南南東",
+            "南", "南南西", "西南", "西南西", "西", "西北西", "西北", "北北西"
+        ]
+        idx = int((deg + 11.25) / 22.5) % 16
+        return directions[idx] + "風"
+    except Exception:
+        return "微風"
+
+
+def wind_speed_to_beaufort(ws: float) -> str:
+    """將風速 (m/s) 轉換為蒲福風力等級。"""
+    try:
+        ws = float(ws)
+        if ws < 0.3: return "0 級 (無風)"
+        if ws < 1.6: return "1 級 (軟風)"
+        if ws < 3.4: return "2 級 (輕風)"
+        if ws < 5.5: return "3 級 (微風)"
+        if ws < 8.0: return "4 級 (和風)"
+        if ws < 10.8: return "5 級 (清風)"
+        if ws < 13.9: return "6 級 (強風)"
+        return "7 級以上 (大風/烈風)"
+    except Exception:
+        return "--"
+
+
+def get_clothing_advice(min_t: float, max_t: float, pop: float = 0.0, weather_desc: str = "") -> dict:
+    """
+    根據氣象署預報氣溫與天候狀況，產生智慧穿搭與外出裝備建議。
+    """
+    diff = round(max_t - min_t, 1)
+    avg_t = round((min_t + max_t) / 2, 1)
+    is_rain = "雨" in str(weather_desc) or pop >= 30
+
+    if max_t >= 32 or avg_t >= 30:
+        level = "酷暑炎熱"
+        badge_color = "#ef4444"
+        top = "短袖棉 T、無袖背心、涼感排汗機能衫"
+        outer = "抗 UV 透氣防曬薄罩衫 / 防曬冰絲袖套"
+        bottom = "通風短褲、涼感休閒九分褲、透氣寬褲"
+        accessory = "太陽眼鏡 🕶️、防曬遮陽帽 🧢、SPF50+ 防曬乳、充足飲用水 💧"
+        layering = "單層清爽透氣穿搭即可，避免深色厚重材質。"
+    elif max_t >= 27 or avg_t >= 25:
+        level = "溫暖舒適"
+        badge_color = "#f97316"
+        top = "舒適棉質短袖 T-Shirt、休閒短袖襯衫"
+        outer = "冷氣房可備一件薄長袖襯衫或透氣防曬外套"
+        bottom = "休閒長褲、棉麻長裙、丹寧牛仔褲"
+        accessory = "外出遮陽帽、水壺、太陽眼鏡"
+        layering = "基本單層即可，進出室內冷氣房可添薄罩衫。"
+    elif avg_t >= 20:
+        level = "舒適微涼"
+        badge_color = "#10b981"
+        top = "薄長袖上衣、七分袖、輕薄棉質衛衣"
+        outer = "薄風衣、牛仔外套、針織開襟罩衫"
+        bottom = "休閒卡其褲、直筒牛仔褲、休閒棉長褲"
+        accessory = "保溫水瓶、晚間外出備用薄絲巾"
+        layering = "早晚溫差顯著，建議內搭短袖外罩薄外套的洋蔥式穿法 🧅。"
+    elif avg_t >= 15:
+        level = "涼冷偏寒"
+        badge_color = "#06b6d4"
+        top = "長袖衛衣、保暖針織毛衣、內搭發熱衣"
+        outer = "防風連帽夾克、保暖鋪棉外套、雙層羊毛風衣"
+        bottom = "刷毛長褲、厚磅牛仔褲、長襪"
+        accessory = "輕便保暖圍巾 🧣、護唇膏、潤膚霜"
+        layering = "洋蔥式三層穿搭：發熱內著 + 長袖中層 + 防風防寒外層。"
+    else:
+        level = "寒冷防凍"
+        badge_color = "#3b82f6"
+        top = "重磅針織毛衣、刷毛發熱衣、高領保暖衣"
+        outer = "長版羽絨外套、防風防潑水雪衣、厚大衣"
+        bottom = "保暖防風厚長褲、刷毛防寒緊身內搭"
+        accessory = "保暖毛線帽、厚圍巾 🧣、防風手套 🧤、暖暖包"
+        layering = "厚重禦寒多層次穿著，手足頭部做好防風保暖。"
+
+    rain_tip = "隨身攜帶折疊傘 ☔，建議穿著防水耐髒鞋款或防水防滑鞋" if is_rain else "天候大致穩定，晴朗舒適"
+    diff_tip = f"早晚日溫差達 {diff}°C，強烈建議「洋蔥式多層穿法」🧅，方便隨氣溫穿脫！" if diff >= 7 else "日夜溫差平緩，單套舒適穿著即可安心出門。"
+
+    return {
+        "level": level,
+        "badge_color": badge_color,
+        "avg_t": avg_t,
+        "diff": diff,
+        "top": top,
+        "outer": outer,
+        "bottom": bottom,
+        "accessory": accessory,
+        "layering": layering,
+        "rain_tip": rain_tip,
+        "temp_diff_tip": diff_tip,
+        "is_rain": is_rain
+    }
+
+
 # ── 獨立執行驗證 ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import json

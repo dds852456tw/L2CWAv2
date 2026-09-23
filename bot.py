@@ -30,7 +30,7 @@ load_dotenv()
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.cwa_service import get_clean_weather_data
+from src.cwa_service import get_clean_weather_data, get_clothing_advice
 from src.db_service import init_db, upsert_records, get_all_stations, get_temp_distribution
 from src.line_flex import create_weather_flex, create_map_flex
 
@@ -180,14 +180,40 @@ def handle_message(event: MessageEvent):
             )
         ]
 
+    elif any(kw in user_text for kw in ["穿什麼", "穿著", "穿搭", "衣服", "建議穿著"]):
+        try:
+            records = get_clean_weather_data()
+            if records:
+                temps = [r["air_temperature"] for r in records if r.get("air_temperature") is not None and r["air_temperature"] > -90]
+                min_t = min(temps) if temps else 22.0
+                max_t = max(temps) if temps else 30.0
+                advice = get_clothing_advice(min_t, max_t)
+                text = (
+                    f"👔 今日智慧生活穿搭建議\n"
+                    f"🌡 全台體感：{advice['avg_t']}°C（{advice['level']}）\n"
+                    f"─────────────────\n"
+                    f"👕 上衣：{advice['top']}\n"
+                    f"🧥 外套：{advice['outer']}\n"
+                    f"👖 下著：{advice['bottom']}\n"
+                    f"🧢 配件：{advice['accessory']}\n\n"
+                    f"🧅 溫差叮嚀：{advice['temp_diff_tip']}\n"
+                    f"☔ 雨具提醒：{advice['rain_tip']}"
+                )
+                reply_messages = [TextMessage(text=text)]
+            else:
+                reply_messages = [TextMessage(text="⚠️ 目前無法取得氣象資料以提供穿著建議。")]
+        except Exception as e:
+            reply_messages = [TextMessage(text=f"❌ 取得穿著建議失敗：{e}")]
+
     else:
         reply_messages = [
             TextMessage(
                 text=(
                     "👋 你好！我是台灣即時天氣機器人 🌡\n\n"
                     "📌 指令說明：\n"
-                    "• 「現在天氣」— 查看即時溫度\n"
-                    "• 「即時地圖」— 開啟暗黑天氣地圖\n\n"
+                    "• 「現在天氣」— 查看即時溫度與最熱測站\n"
+                    "• 「建議穿著」— 智慧生活穿搭與防護指南\n"
+                    "• 「即時地圖」— 開啟暗黑即時天氣地圖\n\n"
                     "請輸入以上關鍵字開始使用！"
                 )
             )
