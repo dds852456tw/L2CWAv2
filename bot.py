@@ -69,6 +69,20 @@ def callback():
     return "OK"
 
 
+@app.route("/", methods=["GET"])
+def index():
+    """首頁端點。"""
+    return {
+        "status": "online",
+        "service": "L2CWAv2 Taiwan Weather Bot & API",
+        "endpoints": {
+            "health": "/health",
+            "webhook": "/callback (POST)"
+        },
+        "description": "CWA Open Data Taiwan Weather Monitoring System"
+    }, 200
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """健康檢查端點。"""
