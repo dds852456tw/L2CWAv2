@@ -292,8 +292,8 @@ def get_clean_forecast_data() -> list:
         logger.error(f"[CWA] 取得預報資料失敗: {e}")
         return []
 
-    # 1. 整理各縣市每日的高低溫數值
-    county_daily = defaultdict(lambda: defaultdict(lambda: {"min": [], "max": []}))
+    # 1. 整理各縣市每日的高低溫數值、降雨機率、風速與天氣現象
+    county_daily = defaultdict(lambda: defaultdict(lambda: {"min": [], "max": [], "pop": [], "ws": [], "wx": []}))
 
     for loc in locations:
         c_name = loc.get("LocationName", "")
@@ -317,16 +317,45 @@ def get_clean_forecast_data() -> list:
                             county_daily[c_name][d]["max"].append(float(vals[0]["MaxTemperature"]))
                         except ValueError:
                             pass
+            elif el_name == "12小時降雨機率":
+                for t in elem.get("Time", []):
+                    d = t.get("StartTime", "")[:10]
+                    vals = t.get("ElementValue", [])
+                    if vals and vals[0].get("ProbabilityOfPrecipitation"):
+                        try:
+                            p = vals[0]["ProbabilityOfPrecipitation"]
+                            if p not in ["-", "", None]:
+                                county_daily[c_name][d]["pop"].append(float(p))
+                        except ValueError:
+                            pass
+            elif el_name == "風速":
+                for t in elem.get("Time", []):
+                    d = t.get("StartTime", "")[:10]
+                    vals = t.get("ElementValue", [])
+                    if vals and vals[0].get("WindSpeed"):
+                        try:
+                            w = vals[0]["WindSpeed"]
+                            if w not in ["-", "", None]:
+                                county_daily[c_name][d]["ws"].append(float(w))
+                        except ValueError:
+                            pass
+            elif el_name == "天氣現象":
+                for t in elem.get("Time", []):
+                    d = t.get("StartTime", "")[:10]
+                    vals = t.get("ElementValue", [])
+                    if vals and vals[0].get("Weather"):
+                        county_daily[c_name][d]["wx"].append(str(vals[0]["Weather"]))
 
     # 2. 彙整各分區 (6 大分區 + 離島)
-    region_daily = defaultdict(lambda: defaultdict(lambda: {"min": [], "max": []}))
+    region_daily = defaultdict(lambda: defaultdict(lambda: {"min": [], "max": [], "pop": [], "ws": [], "wx": []}))
     for c_name, dates in county_daily.items():
         reg = COUNTY_TO_REGION.get(c_name, "其他地區")
         for d, vals in dates.items():
-            if vals["min"]:
-                region_daily[reg][d]["min"].extend(vals["min"])
-            if vals["max"]:
-                region_daily[reg][d]["max"].extend(vals["max"])
+            if vals["min"]: region_daily[reg][d]["min"].extend(vals["min"])
+            if vals["max"]: region_daily[reg][d]["max"].extend(vals["max"])
+            if vals["pop"]: region_daily[reg][d]["pop"].extend(vals["pop"])
+            if vals["ws"]: region_daily[reg][d]["ws"].extend(vals["ws"])
+            if vals["wx"]: region_daily[reg][d]["wx"].extend(vals["wx"])
 
     results = []
 
@@ -335,12 +364,21 @@ def get_clean_forecast_data() -> list:
         for d in sorted(dates.keys()):
             mins = dates[d]["min"]
             maxs = dates[d]["max"]
+            pops = dates[d]["pop"]
+            wss = dates[d]["ws"]
+            wxs = dates[d]["wx"]
             if mins and maxs:
+                pop_val = round(max(pops), 0) if pops else 0.0
+                ws_val = round(sum(wss) / len(wss), 1) if wss else 2.0
+                wx_val = wxs[0] if wxs else "多雲到晴"
                 results.append({
                     "region_name": reg,
                     "data_date":   d,
                     "min_t":       round(sum(mins) / len(mins), 1),
                     "max_t":       round(sum(maxs) / len(maxs), 1),
+                    "pop":         pop_val,
+                    "wind_speed":  ws_val,
+                    "weather_desc": wx_val,
                 })
 
     # 同步加入 22 縣市獨立預報（提供更細膩的選擇）
@@ -348,12 +386,21 @@ def get_clean_forecast_data() -> list:
         for d in sorted(dates.keys()):
             mins = dates[d]["min"]
             maxs = dates[d]["max"]
+            pops = dates[d]["pop"]
+            wss = dates[d]["ws"]
+            wxs = dates[d]["wx"]
             if mins and maxs:
+                pop_val = round(max(pops), 0) if pops else 0.0
+                ws_val = round(sum(wss) / len(wss), 1) if wss else 2.0
+                wx_val = wxs[0] if wxs else "多雲到晴"
                 results.append({
                     "region_name": c_name,
                     "data_date":   d,
                     "min_t":       round(min(mins), 1),
                     "max_t":       round(max(maxs), 1),
+                    "pop":         pop_val,
+                    "wind_speed":  ws_val,
+                    "weather_desc": wx_val,
                 })
 
     logger.info(f"[CWA] 成功解析一週預報資料共 {len(results)} 筆")
@@ -404,13 +451,98 @@ def wind_speed_to_beaufort(ws: float) -> str:
         return "--"
 
 
-def get_clothing_advice(min_t: float, max_t: float, pop: float = 0.0, weather_desc: str = "") -> dict:
+def get_rain_gear_advice(pop: float = 0.0, wind_speed: float = 2.0, weather_desc: str = "") -> dict:
     """
-    根據氣象署預報氣溫與天候狀況，產生智慧穿搭與外出裝備建議。
+    依照風速 (m/s) 與降雨機率 (%)，判斷出門應穿雨衣、攜帶大傘或折傘等具體生活建議。
+    """
+    try:
+        pop = float(pop or 0.0)
+    except (ValueError, TypeError):
+        pop = 0.0
+    try:
+        ws = float(wind_speed or 2.0)
+    except (ValueError, TypeError):
+        ws = 2.0
+
+    wx = str(weather_desc or "")
+    is_rain = "雨" in wx or pop >= 30
+
+    # 狀況 1：強風大雨 (風速 >= 8.0 m/s 且 降雨機率 >= 40% 或 天氣有雨) -> 建議穿雨衣、避免開傘
+    if ws >= 8.0 and (pop >= 40 or "雨" in wx):
+        title = "⛈️ 強風豪雨 · 穿著兩件式雨衣 / 避免開傘"
+        gear = "全套/兩件式雨衣 + 防水雨靴"
+        umbrella = "嚴禁使用輕量折疊傘！風力達 5~6 級以上強風，開傘極易折斷開花且非常危險。"
+        badge_color = "#ef4444"
+        action = f"風速達 {ws} m/s (5~6 級強風) 且降雨機率 {int(pop)}%，強烈建議穿著兩件式雨衣，騎車行人請特別防範強側風！"
+        category = "雨衣"
+
+    # 狀況 2：陣風有雨 (風速 >= 5.5 m/s 且 降雨機率 >= 30%) -> 建議抗風長柄大傘或輕便雨衣
+    elif ws >= 5.5 and (pop >= 30 or "雨" in wx):
+        title = "💨 陣風有雨 · 建議攜帶抗風直骨大傘 / 輕便雨衣"
+        gear = "抗風直骨長傘 (玻纖骨架) 或 輕便雨衣"
+        umbrella = "普通折疊傘容易被強風吹翻吹損，建議使用抗風玻纖骨架的大傘；機車騎乘請備妥雨衣。"
+        badge_color = "#f97316"
+        action = f"預測風速 {ws} m/s 搭配降雨機率 {int(pop)}%，傘面宜選抗風大傘，減少下半身被側風側雨淋濕。"
+        category = "抗風大傘"
+
+    # 狀況 3：風小但降雨機率高 (雨勢連續明顯 pop >= 60%) -> 推薦標準長柄大傘或雙人加大折傘
+    elif pop >= 60 or "大雨" in wx or "豪雨" in wx:
+        title = "🌧️ 雨勢顯著 · 推薦標準長柄大傘或雙人折傘"
+        gear = "長柄直傘 (大傘面) 或 雙人加大折疊傘"
+        umbrella = "降雨機率高，出門必備大傘面長直傘，能完整遮蓋背包與鞋褲不受雨淋。"
+        badge_color = "#3b82f6"
+        action = f"降雨機率高達 {int(pop)}%，出門必備大傘，包包內可多備一雙乾淨襪子備用。"
+        category = "長柄大傘"
+
+    # 狀況 4：局部短暫陣雨 (風小，降雨機率 30% ~ 59%) -> 隨身輕量折疊傘
+    elif pop >= 30 or "短暫" in wx or "陣雨" in wx:
+        title = "🌦️ 局部短暫雨 · 隨身必備輕量折疊傘"
+        gear = "輕量三折傘 / 晴雨兩用折傘"
+        umbrella = "降雨型態為短暫間歇陣雨，包包內常備一把輕便折傘，隨時應對突發落雨。"
+        badge_color = "#06b6d4"
+        action = f"降雨機率 {int(pop)}%，外出隨身攜帶折傘最輕便靈活。"
+        category = "折疊傘"
+
+    # 狀況 5：強風無雨 (風速 >= 8.0 m/s 且 降雨機率 < 30%) -> 穿防風外套，無需雨具
+    elif ws >= 8.0:
+        title = "🚩 強陣風注意 · 需著防風外套 / 無需雨具"
+        gear = "防風連帽風衣外套"
+        umbrella = "無降雨訊號無須帶傘。風勢強勁，帽子圍巾宜抓牢。"
+        badge_color = "#eab308"
+        action = f"今日風力達 {ws} m/s，行經高樓空曠處注意強風吹襲，著防風外套最佳。"
+        category = "防風外套"
+
+    # 狀況 6：晴朗乾燥 / 降雨機率極低 -> 晴雨遮陽傘
+    else:
+        title = "☀️ 晴朗少雨 · 無需雨具 / 可帶抗 UV 晴雨兩用傘"
+        gear = "抗 UV 輕量遮陽傘 (可選)"
+        umbrella = "降雨機率極低，出門無須帶雨傘；若陽光強烈可備遮陽傘防曬。"
+        badge_color = "#10b981"
+        action = f"降雨機率僅 {int(pop)}%，天候穩定晴朗，適合各類戶外活動。"
+        category = "遮陽傘/免帶"
+
+    return {
+        "pop": pop,
+        "wind_speed": ws,
+        "title": title,
+        "gear": gear,
+        "umbrella": umbrella,
+        "badge_color": badge_color,
+        "action": action,
+        "category": category,
+        "is_rain": is_rain
+    }
+
+
+def get_clothing_advice(min_t: float, max_t: float, pop: float = 0.0, wind_speed: float = 2.0, weather_desc: str = "") -> dict:
+    """
+    根據氣象署預報氣溫與天候狀況，產生智慧穿搭、風力評估與雨具型態（雨衣/大傘/折傘）建議。
     """
     diff = round(max_t - min_t, 1)
     avg_t = round((min_t + max_t) / 2, 1)
-    is_rain = "雨" in str(weather_desc) or pop >= 30
+    
+    # 整合雨具與風力生活指標
+    rain_gear = get_rain_gear_advice(pop, wind_speed, weather_desc)
 
     if max_t >= 32 or avg_t >= 30:
         level = "酷暑炎熱"
@@ -453,7 +585,6 @@ def get_clothing_advice(min_t: float, max_t: float, pop: float = 0.0, weather_de
         accessory = "保暖毛線帽、厚圍巾 🧣、防風手套 🧤、暖暖包"
         layering = "厚重禦寒多層次穿著，手足頭部做好防風保暖。"
 
-    rain_tip = "隨身攜帶折疊傘 ☔，建議穿著防水耐髒鞋款或防水防滑鞋" if is_rain else "天候大致穩定，晴朗舒適"
     diff_tip = f"早晚日溫差達 {diff}°C，強烈建議「洋蔥式多層穿法」🧅，方便隨氣溫穿脫！" if diff >= 7 else "日夜溫差平緩，單套舒適穿著即可安心出門。"
 
     return {
@@ -466,9 +597,14 @@ def get_clothing_advice(min_t: float, max_t: float, pop: float = 0.0, weather_de
         "bottom": bottom,
         "accessory": accessory,
         "layering": layering,
-        "rain_tip": rain_tip,
         "temp_diff_tip": diff_tip,
-        "is_rain": is_rain
+        "rain_gear": rain_gear,
+        "rain_tip": f"{rain_gear['title']}\n{rain_gear['action']}",
+        "pop": rain_gear["pop"],
+        "wind_speed": rain_gear["wind_speed"],
+        "umbrella_title": rain_gear["title"],
+        "umbrella_gear": rain_gear["gear"],
+        "umbrella_action": rain_gear["action"],
     }
 
 

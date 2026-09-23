@@ -32,6 +32,7 @@ from src.cwa_service import (
     fetch_weather_warnings,
     get_radar_tile_url,
     get_clothing_advice,
+    get_rain_gear_advice,
     calculate_apparent_temp,
     wind_deg_to_compass,
     REGION_COORDS,
@@ -713,15 +714,20 @@ with tab_forecast:
             df_region["溫差"] = (df_region["maxT"] - df_region["minT"]).round(1)
             df_region["日期簡稱"] = df_region["dataDate"].apply(lambda x: x[5:])
 
-            # 👔 智慧生活穿著與外出裝備建議
+            # 👔 智慧生活穿著與外出裝備建議（結合風速與降雨機率）
             today_row = df_region.iloc[0]
-            advice = get_clothing_advice(today_row["minT"], today_row["maxT"])
+            t_pop = today_row.get("pop", 0.0) if "pop" in today_row else 0.0
+            t_ws = today_row.get("wind_speed", 2.0) if "wind_speed" in today_row else 2.0
+            t_wx = today_row.get("weather_desc", "") if "weather_desc" in today_row else ""
+            advice = get_clothing_advice(today_row["minT"], today_row["maxT"], pop=t_pop, wind_speed=t_ws, weather_desc=t_wx)
+            gear = get_rain_gear_advice(t_pop, t_ws, t_wx)
+
             st.markdown(f"""
             <div style="background:linear-gradient(145deg, #131A26, #1A2332);border:1px solid #233146;
-                        border-radius:12px;padding:16px 20px;margin-bottom:20px;box-shadow:0 4px 16px rgba(0,0,0,0.3);">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:12px;gap:8px;">
-                    <div style="font-size:1.15rem;font-weight:700;color:#F0F6FC;">
-                        👔 【{selected_region}】今日智慧穿著與生活建議
+                        border-radius:14px;padding:18px 22px;margin-bottom:22px;box-shadow:0 6px 20px rgba(0,0,0,0.35);">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:14px;gap:8px;">
+                    <div style="font-size:1.2rem;font-weight:700;color:#F0F6FC;display:flex;align-items:center;gap:8px;">
+                        <span>👔 【{selected_region}】今日智慧生活穿搭與雨具指標</span>
                     </div>
                     <div style="background:{advice['badge_color']}22;color:{advice['badge_color']};
                                 border:1px solid {advice['badge_color']}55;padding:4px 12px;border-radius:6px;font-weight:700;font-size:0.85rem;">
@@ -742,7 +748,21 @@ with tab_forecast:
                         <b style="color:#8B949E;">🧢 出門配件：</b><br><span style="color:#FFF;">{advice['accessory']}</span>
                     </div>
                 </div>
-                <div style="margin-top:12px;font-size:0.86rem;color:#38BDF8;">
+                <!-- ☔ 雨具與防風指南卡 -->
+                <div style="margin-top:14px;padding:12px 16px;border-radius:10px;background:#0D131F;border:1px solid #28374D;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+                        <div style="font-weight:700;color:#F0F6FC;font-size:0.95rem;">
+                            ☔ 外出雨具指南：<span style="color:{gear['badge_color']};">{gear['title']}</span>
+                        </div>
+                        <div style="font-size:0.8rem;color:#38BDF8;background:rgba(56,189,248,0.12);padding:2px 8px;border-radius:4px;">
+                            降雨機率 {int(gear['pop'])}% · 風速 {gear['wind_speed']} m/s
+                        </div>
+                    </div>
+                    <div style="font-size:0.85rem;color:#94A3B8;">
+                        💡 <b>出行叮嚀：</b> {gear['action']}
+                    </div>
+                </div>
+                <div style="margin-top:10px;font-size:0.85rem;color:#38BDF8;">
                     🧅 <b>溫差穿搭提醒：</b> {advice['temp_diff_tip']}
                 </div>
             </div>
@@ -801,14 +821,22 @@ with tab_forecast:
 
             with table_col:
                 st.markdown(f"### 📋 {selected_region} · 一週預報資料表格 [環節 15]")
-                display_df = df_region[["dataDate", "minT", "maxT", "溫差"]].rename(
-                    columns={
-                        "dataDate": "預報日期",
-                        "minT": "最低溫 (°C)",
-                        "maxT": "最高溫 (°C)",
-                        "溫差": "日溫差 (°C)",
-                    }
-                )
+                # 欄位整理
+                cols_to_show = ["dataDate", "minT", "maxT", "溫差"]
+                rename_map = {
+                    "dataDate": "預報日期",
+                    "minT": "最低溫 (°C)",
+                    "maxT": "最高溫 (°C)",
+                    "溫差": "日溫差 (°C)",
+                }
+                if "pop" in df_region.columns:
+                    cols_to_show.append("pop")
+                    rename_map["pop"] = "降雨機率 (%)"
+                if "wind_speed" in df_region.columns:
+                    cols_to_show.append("wind_speed")
+                    rename_map["wind_speed"] = "風速 (m/s)"
+
+                display_df = df_region[cols_to_show].rename(columns=rename_map)
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         st.markdown("<br>", unsafe_allow_html=True)

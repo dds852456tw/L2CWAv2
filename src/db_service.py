@@ -150,6 +150,20 @@ def init_db() -> None:
                     except Exception:
                         pass
 
+            # 動態補足 TemperatureForecasts 擴充欄位（降雨機率、風速、天氣描述）
+            existing_f_cols = {row["name"] for row in conn.execute("PRAGMA table_info(TemperatureForecasts)").fetchall()}
+            f_cols = {
+                "pop": "REAL DEFAULT 0.0",
+                "wind_speed": "REAL DEFAULT 0.0",
+                "weather_desc": "TEXT DEFAULT ''"
+            }
+            for col_name, col_type in f_cols.items():
+                if col_name not in existing_f_cols:
+                    try:
+                        conn.execute(f"ALTER TABLE TemperatureForecasts ADD COLUMN {col_name} {col_type};")
+                    except Exception:
+                        pass
+
             conn.commit()
         logger.info(f"[DB] 資料庫初始化完成: {get_db_path()}")
     except Exception as e:
@@ -228,13 +242,16 @@ def upsert_records(records: list) -> int:
 # 煥哥課程環節 8 & 9：一週預報資料庫寫入 (重複執行不重複插入)
 UPSERT_FORECAST_SQL = """
 INSERT INTO TemperatureForecasts
-    (regionName, dataDate, minT, maxT, updated_at)
+    (regionName, dataDate, minT, maxT, pop, wind_speed, weather_desc, updated_at)
 VALUES
-    (:region_name, :data_date, :min_t, :max_t, :updated_at)
+    (:region_name, :data_date, :min_t, :max_t, :pop, :wind_speed, :weather_desc, :updated_at)
 ON CONFLICT(regionName, dataDate) DO UPDATE SET
-    minT       = excluded.minT,
-    maxT       = excluded.maxT,
-    updated_at = excluded.updated_at;
+    minT         = excluded.minT,
+    maxT         = excluded.maxT,
+    pop          = excluded.pop,
+    wind_speed   = excluded.wind_speed,
+    weather_desc = excluded.weather_desc,
+    updated_at   = excluded.updated_at;
 """
 
 
@@ -246,7 +263,18 @@ def upsert_forecast_records(records: list) -> int:
         return 0
 
     now = datetime.utcnow().isoformat() + "Z"
-    rows = [{**r, "updated_at": now} for r in records]
+    rows = []
+    for r in records:
+        rows.append({
+            "region_name": r.get("region_name"),
+            "data_date":   r.get("data_date"),
+            "min_t":       r.get("min_t"),
+            "max_t":       r.get("max_t"),
+            "pop":         r.get("pop", 0.0),
+            "wind_speed":  r.get("wind_speed", 2.0),
+            "weather_desc": r.get("weather_desc", "多雲到晴"),
+            "updated_at":  now,
+        })
 
     try:
         with get_connection(read_only=False) as conn:

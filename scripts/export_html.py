@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 scripts/export_html.py
-導出高質感、具備 CWA 完整氣象數值與「智慧建議穿著」功能的靜態 index.html。
+導出高質感、具備 CWA 完整氣象數值、智慧建議穿著，以及依風速與降雨機率判斷雨具型態（雨衣/抗風大傘/折傘/遮陽傘）的靜態 index.html。
 """
 import os
 import json
@@ -61,9 +61,9 @@ def generate_index_html():
         r["wind_dir_text"] = wind_deg_to_compass(wd)
         stations_data.append(r)
         
-    # 2. 讀取預報資料
+    # 2. 讀取預報資料 (包含降雨機率 pop、風速 wind_speed、天氣描述 weather_desc)
     df_forecast = pd.read_sql_query(
-        "SELECT regionName, dataDate, minT, maxT FROM TemperatureForecasts ORDER BY dataDate ASC",
+        "SELECT regionName, dataDate, minT, maxT, pop, wind_speed, weather_desc FROM TemperatureForecasts ORDER BY dataDate ASC",
         conn
     )
     conn.close()
@@ -94,7 +94,7 @@ def generate_index_html():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌡️ 台灣即時天氣監測 & 一週氣溫趨勢預報系統</title>
+    <title>🌡️ 台灣即時天氣監測 & 智慧穿著雨具生活指標系統</title>
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Google Fonts Outfit & Noto Sans TC -->
@@ -322,7 +322,7 @@ def generate_index_html():
         }}
         /* Table */
         .table-container {{
-            max-height: 240px;
+            max-height: 250px;
             overflow-y: auto;
             margin-top: 16px;
             border: 1px solid var(--bg-card-border);
@@ -348,29 +348,6 @@ def generate_index_html():
         }}
         tr:hover td {{
             background-color: rgba(255,255,255,0.02);
-        }}
-        /* Legends */
-        .map-legend {{
-            display: flex;
-            gap: 16px;
-            align-items: center;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            margin-top: 12px;
-            flex-wrap: wrap;
-            padding-top: 8px;
-            border-top: 1px solid #1c2331;
-        }}
-        .legend-item {{
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }}
-        .legend-dot {{
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
         }}
         /* =================== 👔 智慧穿著與生活建議卡 =================== */
         .clothing-panel {{
@@ -400,14 +377,14 @@ def generate_index_html():
         }}
         .clothing-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 18px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
         }}
         .clothing-item {{
             background: rgba(10, 13, 20, 0.6);
             border: 1px solid #202b3c;
             border-radius: 12px;
-            padding: 16px;
+            padding: 15px 18px;
             transition: all 0.2s;
         }}
         .clothing-item:hover {{
@@ -425,22 +402,51 @@ def generate_index_html():
             text-transform: uppercase;
         }}
         .clothing-item-val {{
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             color: #f1f5f9;
         }}
-        .tip-banner {{
+        /* ☔ 雨具與防風指南卡 */
+        .rain-gear-box {{
             margin-top: 18px;
-            padding: 12px 18px;
-            border-radius: 10px;
-            background: rgba(56, 189, 248, 0.08);
-            border: 1px solid rgba(56, 189, 248, 0.25);
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            font-size: 0.92rem;
+            padding: 18px 20px;
+            border-radius: 14px;
+            background: linear-gradient(145deg, #0d131f, #111a28);
+            border: 1px solid #28374d;
+            box-shadow: inset 0 1px 3px rgba(255,255,255,0.05);
         }}
-        /* Leaflet Popups */
+        .rain-gear-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        .gear-chip {{
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 0.88rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .gear-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1.3fr;
+            gap: 14px;
+        }}
+        @media (max-width: 800px) {{
+            .gear-grid {{ grid-template-columns: 1fr; }}
+        }}
+        .gear-subcard {{
+            background: rgba(18, 26, 39, 0.7);
+            border: 1px solid #233044;
+            border-radius: 10px;
+            padding: 12px 16px;
+        }}
+        /* Popups */
         .leaflet-popup-content-wrapper, .leaflet-popup-tip {{
             background: #131823 !important;
             color: #f0f6fc !important;
@@ -459,15 +465,6 @@ def generate_index_html():
             font-weight: 900;
             margin-bottom: 8px;
         }}
-        .popup-tag {{
-            display: inline-block;
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            border-radius: 4px;
-            background: #1e293b;
-            color: #94a3b8;
-            margin-right: 4px;
-        }}
         footer {{
             text-align: center;
             color: var(--text-muted);
@@ -482,11 +479,11 @@ def generate_index_html():
     <header>
         <div class="header-title-box">
             <span class="badge-pill">
-                <span>⚡</span> CWA 氣象署即時觀測 × 一週預報 × 智慧穿搭生活指標
+                <span>⚡</span> CWA 氣象署即時觀測 × 一週預報 · 風速雨量智慧雨具指標
             </span>
-            <div class="header-title">🌡️ 台灣即時天氣監測 & 智慧穿著預報系統</div>
+            <div class="header-title">🌡️ 台灣即時天氣監測 & 智慧穿著雨具生活系統</div>
             <div class="header-subtitle">
-                中央氣象署 Open Data (O-A0003-001 / F-D0047-091) · Esri Dark Gray 免 Key 純淨底圖 · RainViewer 雷達回波
+                中央氣象署 Open Data (O-A0003-001 / F-D0047-091) · 降雨機率 PoP × 風力級數 · 智能雨具/大傘/雨衣外出建議
             </div>
         </div>
     </header>
@@ -529,18 +526,18 @@ def generate_index_html():
         </div>
     </div>
 
-    <!-- =================== 👔 智慧穿著與生活建議模組 =================== -->
+    <!-- =================== 👔 智慧穿著與外出雨具生活建議卡 =================== -->
     <div class="clothing-panel">
         <div class="clothing-header">
             <div>
                 <div style="font-size: 1.35rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-                    <span>👔 智慧生活穿著與外出指標</span>
+                    <span>👔 智慧穿搭與外出生活指標</span>
                     <span style="font-size: 0.8rem; font-weight: 600; color: var(--accent-cyan); background: rgba(56,189,248,0.15); padding: 2px 8px; border-radius: 4px;">
-                        根據 CWA 溫差與體感演算
+                        依 CWA 溫差、風速與降雨機率精準運算
                     </span>
                 </div>
                 <div style="font-size: 0.88rem; color: var(--text-muted); margin-top: 4px;">
-                    當前關注分區：<b id="adviceRegionText" style="color: var(--text-main);">中部地區</b>
+                    當前關注地區：<b id="adviceRegionText" style="color: var(--text-main);">中部地區</b>
                 </div>
             </div>
             <div id="clothingBadge" class="clothing-badge" style="background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.3);">
@@ -548,13 +545,14 @@ def generate_index_html():
             </div>
         </div>
 
+        <!-- 4 大穿著建議模組 -->
         <div class="clothing-grid">
             <div class="clothing-item">
                 <div class="clothing-item-title">👕 上衣內著建議</div>
                 <div id="adviceTop" class="clothing-item-val">棉質短袖 T-Shirt、休閒襯衫、透氣針織短袖</div>
             </div>
             <div class="clothing-item">
-                <div class="clothing-item-title">🧥 外套與外層搭配</div>
+                <div class="clothing-item-title">🧥 外套外層搭配</div>
                 <div id="adviceOuter" class="clothing-item-val">早晚或冷氣房備用薄長袖襯衫或透氣針織罩衫</div>
             </div>
             <div class="clothing-item">
@@ -562,17 +560,42 @@ def generate_index_html():
                 <div id="adviceBottom" class="clothing-item-val">休閒長褲、棉麻短褲、舒適球鞋 / 涼鞋</div>
             </div>
             <div class="clothing-item">
-                <div class="clothing-item-title">🧢 必備防護與外出配件</div>
-                <div id="adviceAccessory" class="clothing-item-val">遮陽帽 🧢、太陽眼鏡 🕶️、隨身水壺、折疊傘備用</div>
+                <div class="clothing-item-title">🧢 必備防護與配件</div>
+                <div id="adviceAccessory" class="clothing-item-val">遮陽帽 🧢、太陽眼鏡 🕶️、隨身水壺</div>
             </div>
         </div>
 
-        <div class="tip-banner">
+        <!-- ☔ 外出雨具與防風指南 (依照風速與降雨機率精準判斷雨衣或傘具大小) -->
+        <div class="rain-gear-box">
+            <div class="rain-gear-header">
+                <div style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+                    <span>☔ 外出雨具與防風指南</span>
+                    <span id="adviceRainMetric" style="font-size: 0.82rem; padding: 3px 10px; border-radius: 6px; font-weight: 700; background: rgba(56, 189, 248, 0.15); color: #38bdf8;">
+                        降雨機率 0% · 預估風速 2.5 m/s
+                    </span>
+                </div>
+                <div id="adviceGearTypeBadge" class="gear-chip" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">
+                    無需雨具 / 遮陽傘
+                </div>
+            </div>
+            <div class="gear-grid">
+                <div class="gear-subcard">
+                    <b style="color: #94a3b8; font-size: 0.82rem; text-transform: uppercase;">🌂 推薦攜帶裝備：</b>
+                    <div id="adviceGearTitle" style="color: #f8fafc; font-weight: 700; font-size: 1rem; margin-top: 4px;">抗 UV 輕量遮陽傘 (可選)</div>
+                </div>
+                <div class="gear-subcard">
+                    <b style="color: #94a3b8; font-size: 0.82rem; text-transform: uppercase;">💡 風雨防護出行叮嚀：</b>
+                    <div id="adviceGearAction" style="color: #cbd5e1; font-size: 0.88rem; margin-top: 4px;">降雨機率低，天候穩定晴朗；陽光強烈時可攜帶抗 UV 遮陽傘防曬。</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 16px; padding: 12px 18px; border-radius: 10px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.25); display: flex; gap: 12px; align-items: center; font-size: 0.92rem;">
             <span style="font-size: 1.3rem;">🧅</span>
             <div>
-                <b id="adviceLayeringTitle">洋蔥式穿法提醒：</b>
+                <b>洋蔥式穿法提醒：</b>
                 <span id="adviceLayeringText" style="color: #cbd5e1;">
-                    全天預估日溫差達 6.5°C，早晚清涼中午偏暖，建議採「短袖 + 薄開襟外套」方便進出室內冷氣房增減！
+                    全天預估日溫差達 6.5°C，早晚清涼中午偏暖，建議採「短袖 + 薄開襟外套」方便隨室內外氣溫增減！
                 </span>
             </div>
         </div>
@@ -645,10 +668,11 @@ def generate_index_html():
                     <thead>
                         <tr>
                             <th>預報日期</th>
-                            <th>最低溫 (MinT)</th>
-                            <th>最高溫 (MaxT)</th>
-                            <th>日溫差</th>
-                            <th>穿著與天氣感受</th>
+                            <th>最低溫</th>
+                            <th>最高溫</th>
+                            <th>降雨機率</th>
+                            <th>預估風速</th>
+                            <th>推薦雨具</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody"></tbody>
@@ -664,7 +688,7 @@ def generate_index_html():
                 📊 全台所有地區預報總表 (Taiwan Weather Dashboard) [環節 19]
             </div>
             <div style="font-size: 0.85rem; color: var(--text-muted);">
-                共 29 個行政與氣象分區
+                共 29 個行政與氣象分區 · 包含降雨機率與雨具型態
             </div>
         </div>
         <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--bg-card-border); border-radius: 10px;">
@@ -673,11 +697,12 @@ def generate_index_html():
                     <tr>
                         <th>地區名稱</th>
                         <th>查詢日期</th>
-                        <th>最低溫 (MinT)</th>
-                        <th>最高溫 (MaxT)</th>
-                        <th>平均氣溫</th>
-                        <th>溫度狀態</th>
-                        <th>推薦穿搭</th>
+                        <th>最低溫</th>
+                        <th>最高溫</th>
+                        <th>降雨機率</th>
+                        <th>預測風速</th>
+                        <th>推薦雨具</th>
+                        <th>穿搭建議</th>
                     </tr>
                 </thead>
                 <tbody id="allRegionsBody"></tbody>
@@ -687,7 +712,7 @@ def generate_index_html():
 
     <footer>
         <p>L2CWAv2 台灣氣象系統 | 整合 CWA O-A0003-001、F-D0047-091、W-C0033-001 與 RainViewer 即時雷達</p>
-        <p style="margin-top: 6px;">支援智慧生活穿搭建議 · 具備完整 CWA 體感與氣候分析 · Hosted on GitHub Pages</p>
+        <p style="margin-top: 6px;">支援智慧生活穿搭建議 · 具備完整 CWA 降雨機率與風速雨衣/大傘判定 · Hosted on GitHub Pages</p>
     </footer>
 </div>
 
@@ -719,7 +744,7 @@ def generate_index_html():
     const forecastLayer = L.layerGroup();
     let radarLayer = null;
 
-    // 1. 渲染即時測站 (含 CWA 擴充資訊：體感溫度、風向風速、雨量、濕度)
+    // 1. 渲染即時測站
     stations.forEach(s => {{
         if (!s.latitude || !s.longitude || s.air_temperature === null) return;
         
@@ -754,7 +779,7 @@ def generate_index_html():
         realtimeLayer.addLayer(marker);
     }});
 
-    // 2. 均溫著色函式 (環節 17 標準)
+    // 2. 均溫著色函式
     function getForecastColor(avg) {{
         if (avg < 20) return '#3b82f6';   // 藍色
         if (avg <= 25) return '#10b981';  // 綠色
@@ -773,6 +798,8 @@ def generate_index_html():
                 const coord = regionCoords[regName];
                 const avgT = ((r.minT + r.maxT) / 2).toFixed(1);
                 const color = getForecastColor(parseFloat(avgT));
+                const pop = r.pop ?? 0;
+                const ws = r.wind_speed ?? 2.0;
 
                 const circle = L.circleMarker([coord.lat, coord.lon], {{
                     radius: 15,
@@ -787,11 +814,11 @@ def generate_index_html():
                     <div style="padding:4px;">
                         <div style="font-size:1.15rem; font-weight:800; color:${{color}}">${{regName}}</div>
                         <div style="font-size:0.8rem; color:#8b949e; margin-bottom:8px;">預報日期：${{dateStr}}</div>
-                        <div style="font-size:0.95rem; margin-bottom:4px;">
-                            最低溫 (MinT): <b style="color:#38bdf8;">${{r.minT}}°C</b>
+                        <div style="font-size:0.92rem; margin-bottom:4px;">
+                            最低溫 (MinT): <b style="color:#38bdf8;">${{r.minT}}°C</b> | 最高溫: <b style="color:#f43f5e;">${{r.maxT}}°C</b>
                         </div>
-                        <div style="font-size:0.95rem; margin-bottom:6px;">
-                            最高溫 (MaxT): <b style="color:#f43f5e;">${{r.maxT}}°C</b>
+                        <div style="font-size:0.92rem; margin-bottom:4px;">
+                            ☔ 降雨機率: <b style="color:#38bdf8;">${{pop}}%</b> | 💨 風速: <b style="color:#fbbf24;">${{ws}} m/s</b>
                         </div>
                         <div style="font-size:0.9rem; color:${{color}}; font-weight:700; border-top:1px solid #30363d; padding-top:4px;">
                             當日均溫: ${{avgT}}°C
@@ -853,7 +880,7 @@ def generate_index_html():
         updateAllRegionsTable(e.target.value);
     }});
 
-    // 5. RainViewer 雷達回波圖層 (限制 maxNativeZoom: 7 消除 Zoom Level Not Supported)
+    // 5. RainViewer 雷達回波圖層
     const toggleBtn = document.getElementById('toggleRadar');
     fetch('https://api.rainviewer.com/public/weather-maps.json')
         .then(res => res.json())
@@ -885,7 +912,75 @@ def generate_index_html():
         }}
     }});
 
-    // 6. 一週雙折線圖與表格 (環節 13~16) + 智慧穿著計算
+    // 6. 核心生活雨具判定演算法 (依照風速與降雨機率)
+    function evaluateRainGear(pop, ws, wx) {{
+        pop = parseFloat(pop || 0);
+        ws = parseFloat(ws || 2.0);
+        wx = wx || '';
+
+        // 狀況 1：強風大雨 (風速 >= 8.0 m/s 且 降雨機率 >= 40% 或 天氣有雨) -> 建議穿雨衣、嚴禁開傘
+        if (ws >= 8.0 && (pop >= 40 || wx.includes('雨'))) {{
+            return {{
+                title: '⛈️ 強風豪雨 · 穿著兩件式雨衣 / 避免開傘',
+                gear: '全套/兩件式雨衣 + 防水雨靴',
+                badgeText: '穿兩件式雨衣',
+                badgeColor: '#ef4444',
+                action: `風速高達 ${{ws}} m/s (5~6 級強陣風) 且降雨機率 ${{pop}}%，開傘極易折斷開花且非常危險！強烈建議穿著兩件式雨衣，騎車行人請特別防範強側風！`
+            }};
+        }}
+        // 狀況 2：陣風有雨 (風速 >= 5.5 m/s 且 降雨機率 >= 30%) -> 建議抗風長柄直傘或輕便雨衣
+        else if (ws >= 5.5 && (pop >= 30 || wx.includes('雨'))) {{
+            return {{
+                title: '💨 陣風有雨 · 建議抗風直骨長傘 / 輕便雨衣',
+                gear: '抗風直骨長傘 (玻纖骨架) 或 輕便雨衣',
+                badgeText: '抗風大直傘/雨衣',
+                badgeColor: '#f97316',
+                action: `預測風速 ${{ws}} m/s 搭配降雨機率 ${{pop}}%，普通折傘容易被吹損，建議挑選強韌玻纖抗風直傘；機車通勤請備妥雨衣。`
+            }};
+        }}
+        // 狀況 3：風小但降雨機率高 (雨勢連續明顯 pop >= 60%) -> 推薦標準長柄大傘或雙人折傘
+        else if (pop >= 60 || wx.includes('大雨') || wx.includes('豪雨')) {{
+            return {{
+                title: '🌧️ 雨勢顯著 · 推薦標準長柄大傘或雙人折傘',
+                gear: '長柄直傘 (大傘面) 或 雙人加大折傘',
+                badgeText: '長柄大傘',
+                badgeColor: '#3b82f6',
+                action: `降雨機率高達 ${{pop}}%，出門必備大傘面長直傘，能完整遮蓋背包與鞋褲不受雨淋。`
+            }};
+        }}
+        // 狀況 4：局部短暫陣雨 (風小，降雨機率 30% ~ 59%) -> 隨身輕量折疊傘
+        else if (pop >= 30 || wx.includes('短暫') || wx.includes('陣雨')) {{
+            return {{
+                title: '🌦️ 局部短暫雨 · 隨身必備輕量折疊傘',
+                gear: '輕量三折折疊傘 / 晴雨兩用傘',
+                badgeText: '隨身折疊傘',
+                badgeColor: '#06b6d4',
+                action: `降雨型態為短暫間歇陣雨（降雨機率 ${{pop}}%），包包內常備一把輕便折傘，隨時應對突發落雨最靈活。`
+            }};
+        }}
+        // 狀況 5：強風無雨 (風速 >= 8.0 m/s 且 降雨機率 < 30%) -> 穿防風外套，無需雨具
+        else if (ws >= 8.0) {{
+            return {{
+                title: '🚩 強陣風注意 · 需著防風外套 / 無需雨具',
+                gear: '防風連帽風衣外套',
+                badgeText: '防風外套/免雨具',
+                badgeColor: '#eab308',
+                action: `今日風力達 ${{ws}} m/s，行經高樓空曠處注意強風吹襲，無須帶傘，穿著防風外套最佳。`
+            }};
+        }}
+        // 狀況 6：晴朗少雨 -> 遮陽傘
+        else {{
+            return {{
+                title: '☀️ 晴朗少雨 · 無需雨具 / 可帶抗 UV 晴雨兩用傘',
+                gear: '抗 UV 輕量遮陽傘 (可選)',
+                badgeText: '遮陽傘/免帶',
+                badgeColor: '#10b981',
+                action: `降雨機率僅 ${{pop}}%，天候穩定晴朗，適合各類戶外活動，陽光強烈時可攜帶抗 UV 遮陽傘防曬。`
+            }};
+        }}
+    }}
+
+    // 7. 一週雙折線圖與表格 + 智慧穿著雨具
     const regionSelect = document.getElementById('regionSelect');
     const allRegions = Object.keys(forecastByRegion);
     const priorityRegions = ['中部地區', '北部地區', '南部地區', '東北部地區', '東部地區', '東南部地區'];
@@ -953,7 +1048,6 @@ def generate_index_html():
         }}
     }});
 
-    // 智慧穿搭推薦更新函式
     function updateClothingAdvice(regionName, firstDayData) {{
         document.getElementById('adviceRegionText').textContent = regionName;
         if (!firstDayData) return;
@@ -962,7 +1056,22 @@ def generate_index_html():
         const minT = firstDayData.minT;
         const avgT = ((maxT + minT) / 2).toFixed(1);
         const diff = (maxT - minT).toFixed(1);
+        const pop = firstDayData.pop ?? 0;
+        const ws = firstDayData.wind_speed ?? 2.0;
+        const wx = firstDayData.weather_desc ?? '';
 
+        // 更新雨具指南
+        const gearInfo = evaluateRainGear(pop, ws, wx);
+        document.getElementById('adviceRainMetric').textContent = `降雨機率 ${{pop}}% · 預估風速 ${{ws}} m/s`;
+        const gearBadge = document.getElementById('adviceGearTypeBadge');
+        gearBadge.textContent = gearInfo.badgeText;
+        gearBadge.style.color = gearInfo.badgeColor;
+        gearBadge.style.background = `${{gearInfo.badgeColor}}22`;
+        gearBadge.style.borderColor = `${{gearInfo.badgeColor}}55`;
+        document.getElementById('adviceGearTitle').textContent = gearInfo.gear;
+        document.getElementById('adviceGearAction').textContent = gearInfo.action;
+
+        // 更新穿搭建議
         const badge = document.getElementById('clothingBadge');
         let topText = '', outerText = '', bottomText = '', accText = '', layerText = '';
 
@@ -1026,7 +1135,6 @@ def generate_index_html():
         forecastChart.data.datasets[1].data = minTemps;
         forecastChart.update();
 
-        // 同步更新智慧穿搭建議
         if (data.length > 0) {{
             updateClothingAdvice(regionName, data[0]);
         }}
@@ -1034,20 +1142,19 @@ def generate_index_html():
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         data.forEach(d => {{
-            const diff = (d.maxT - d.minT).toFixed(1);
-            let feeling = '舒適溫和';
-            let dressTip = '短袖+薄衫';
-            if (d.maxT >= 31) {{ feeling = '酷熱高溫'; dressTip = '涼感短袖/遮陽防曬'; }}
-            else if (d.maxT >= 27) {{ feeling = '溫暖舒適'; dressTip = '短袖/備薄外套'; }}
-            else if (d.minT <= 19) {{ feeling = '早晚微涼'; dressTip = '長袖/洋蔥式多層穿法'; }}
-            
+            const pop = d.pop ?? 0;
+            const ws = d.wind_speed ?? 2.0;
+            const wx = d.weather_desc ?? '';
+            const gear = evaluateRainGear(pop, ws, wx);
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td style="font-weight:600;">${{d.dataDate}}</td>
                 <td style="color:#38bdf8; font-weight:700;">${{d.minT}}°C</td>
                 <td style="color:#f43f5e; font-weight:700;">${{d.maxT}}°C</td>
-                <td style="color:#fb923c;">${{diff}}°C</td>
-                <td><span style="color:#f0f6fc; font-weight:600;">${{feeling}}</span> · <span style="color:#94a3b8; font-size:0.85rem;">${{dressTip}}</span></td>
+                <td style="color:#60a5fa; font-weight:700;">${{pop}}%</td>
+                <td style="color:#fbbf24;">${{ws}} m/s</td>
+                <td><span style="background:${{gear.badgeColor}}22; color:${{gear.badgeColor}}; padding:3px 10px; border-radius:6px; font-weight:700; font-size:0.82rem;">${{gear.badgeText}}</span></td>
             `;
             tbody.appendChild(tr);
         }});
@@ -1057,19 +1164,20 @@ def generate_index_html():
         updateRegionForecast(e.target.value);
     }});
 
-    // 7. 更新全台所有地區總表 (環節 19)
+    // 8. 更新全台所有地區總表 (環節 19)
     function updateAllRegionsTable(curDate) {{
         const allTbody = document.getElementById('allRegionsBody');
         allTbody.innerHTML = '';
         const records = forecastByDate[curDate] || [];
 
         records.forEach(r => {{
+            const pop = r.pop ?? 0;
+            const ws = r.wind_speed ?? 2.0;
+            const wx = r.weather_desc ?? '';
+            const gear = evaluateRainGear(pop, ws, wx);
             const avgT = ((r.minT + r.maxT) / 2).toFixed(1);
             const color = getForecastColor(parseFloat(avgT));
-            let badge = '舒適';
-            let outfit = '短袖+輕便長褲';
-            if (r.maxT >= 31) {{ badge = '炎熱'; outfit = '短袖/抗UV防曬'; }}
-            else if (r.minT < 20) {{ badge = '微涼'; outfit = '薄長袖+夾克外套'; }}
+            let outfit = avgT >= 28 ? '短袖/涼感' : (avgT >= 22 ? '短袖+薄衫' : '薄長袖/外套');
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -1077,8 +1185,9 @@ def generate_index_html():
                 <td style="color:#8b949e;">${{curDate}}</td>
                 <td style="color:#38bdf8; font-weight:700;">${{r.minT}}°C</td>
                 <td style="color:#f43f5e; font-weight:700;">${{r.maxT}}°C</td>
-                <td style="color:${{color}}; font-weight:700;">${{avgT}}°C</td>
-                <td><span style="background:${{color}}22; color:${{color}}; padding:3px 10px; border-radius:6px; font-size:0.8rem; font-weight:700;">${{badge}}</span></td>
+                <td style="color:#60a5fa; font-weight:700;">${{pop}}%</td>
+                <td style="color:#fbbf24;">${{ws}} m/s</td>
+                <td><span style="background:${{gear.badgeColor}}22; color:${{gear.badgeColor}}; padding:3px 8px; border-radius:6px; font-size:0.8rem; font-weight:700;">${{gear.badgeText}}</span></td>
                 <td style="color:#cbd5e1; font-size:0.85rem;">${{outfit}}</td>
             `;
             allTbody.appendChild(tr);
