@@ -107,31 +107,55 @@ def handle_message(event: MessageEvent):
 
     if any(kw in user_text for kw in ["現在天氣", "天氣", "氣溫", "溫度"]):
         try:
-            # 從 DB 取最新資料（若 DB 為空則先從 API 撈取）
-            stations = get_all_stations()
-            if not stations:
-                records = get_clean_weather_data()
-                upsert_records(records)
+            stations = []
+            
+            # 1. 優先嘗試自本地/暫存資料庫讀取 (Read-Only)
+            try:
                 stations = get_all_stations()
+            except Exception as dbe:
+                logger.warning(f"[Bot] 從 DB 讀取測站失敗，啟動 API Fallback: {dbe}")
+
+            # 2. 若 DB 為空或讀取受阻，直接呼叫 CWA API 獲取即時觀測 (Fallback 機制)
+            if not stations:
+                logger.info("[Bot] 直接從中央氣象署 CWA API 獲取即時資料")
+                records = get_clean_weather_data()
+                if records:
+                    stations = records
+                    # 安全嘗試寫入暫存 DB（若唯讀環境寫入失敗也不影響對使用者的回覆）
+                    try:
+                        upsert_records(records)
+                    except Exception as we:
+                        logger.debug(f"[Bot] 寫入暫存 DB 失敗 (可安全忽略): {we}")
 
             if stations:
-                # 回傳溫度最高的測站
-                hottest = max(stations, key=lambda s: s["air_temperature"])
+                # 篩選出有效氣溫測站並找出最熱站點
+                valid_stations = [s for s in stations if s.get("air_temperature") is not None and s.get("air_temperature") > -90]
+                target_pool = valid_stations if valid_stations else stations
+                hottest = max(target_pool, key=lambda s: s.get("air_temperature", -99))
+
                 flex_payload = create_weather_flex(
-                    station_name=hottest["station_name"],
-                    temperature=hottest["air_temperature"],
-                    obs_time=hottest["obs_time"],
-                    lat=hottest["latitude"],
-                    lon=hottest["longitude"],
+                    station_name=hottest.get("station_name", "觀測站"),
+                    temperature=hottest.get("air_temperature", 0.0),
+                    obs_time=hottest.get("obs_time", ""),
+                    lat=hottest.get("latitude", 23.5),
+                    lon=hottest.get("longitude", 121.0),
                     map_url=STREAMLIT_MAP_URL,
                 )
-                # 同時回傳溫度統計摘要
-                dist = get_temp_distribution()
+
+                # 即時在記憶體中快速計算全台統計摘要（無需強制依賴 SQL PRAGMA/DB 連線）
+                temps = [s["air_temperature"] for s in valid_stations]
+                if temps:
+                    avg_temp = round(sum(temps) / len(temps), 1)
+                    max_temp = max(temps)
+                    min_temp = min(temps)
+                else:
+                    avg_temp = max_temp = min_temp = "--"
+
                 summary = (
-                    f"📊 全台天氣概況（{len(stations)} 站）\n"
-                    f"🌡 平均：{dist.get('avg_temp', '--')}°C\n"
-                    f"🔴 最高：{dist.get('max_temp', '--')}°C\n"
-                    f"🔵 最低：{dist.get('min_temp', '--')}°C"
+                    f"📊 全台天氣概況（{len(valid_stations)} 站）\n"
+                    f"🌡 平均：{avg_temp}°C\n"
+                    f"🔴 最高：{max_temp}°C\n"
+                    f"🔵 最低：{min_temp}°C"
                 )
                 reply_messages = [
                     TextMessage(text=summary),
@@ -141,7 +165,7 @@ def handle_message(event: MessageEvent):
                     ),
                 ]
             else:
-                reply_messages = [TextMessage(text="⚠️ 目前無法取得天氣資料，請稍後再試。")]
+                reply_messages = [TextMessage(text="⚠️ 目前無法自氣象署取得即時觀測資料，請確認 API Key 設定或稍後再試。")]
 
         except Exception as e:
             logger.error(f"[Bot] 天氣查詢失敗: {e}")
