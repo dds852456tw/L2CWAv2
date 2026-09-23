@@ -287,6 +287,9 @@ def build_realtime_map(stations: list, layer_mode: str, radar_url: str = None) -
             name="雷達回波",
             overlay=True,
             opacity=0.75,
+            max_native_zoom=7,
+            max_zoom=18,
+            min_zoom=0,
         ).add_to(m)
 
     # 測站標記

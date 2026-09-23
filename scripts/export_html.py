@@ -438,7 +438,10 @@ def generate_index_html():
                 const radarUrl = `https://tilecache.rainviewer.com${{latest.path}}/256/{{z}}/{{x}}/{{y}}/2/1_1.png`;
                 radarLayer = L.tileLayer(radarUrl, {{
                     opacity: 0.65,
-                    zIndex: 100
+                    zIndex: 100,
+                    minZoom: 0,
+                    maxNativeZoom: 7,
+                    maxZoom: 18
                 }});
             }}
         }})
