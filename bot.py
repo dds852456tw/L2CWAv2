@@ -50,18 +50,69 @@ logger = logging.getLogger(__name__)
 
 LINE_CHANNEL_SECRET      = os.getenv("LINE_CHANNEL_SECRET", "")
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
-STREAMLIT_MAP_URL        = os.getenv("STREAMLIT_MAP_URL", "http://localhost:8501")
+DEFAULT_MAP_URL = "https://dds852456tw.github.io/L2CWAv2/"
+_raw_map_url = os.getenv("STREAMLIT_MAP_URL", DEFAULT_MAP_URL).strip()
+if not _raw_map_url or any(h in _raw_map_url.lower() for h in ["localhost", "127.0.0.1", "0.0.0.0"]):
+    STREAMLIT_MAP_URL = DEFAULT_MAP_URL
+else:
+    STREAMLIT_MAP_URL = _raw_map_url
 
 COUNTY_MAP = {
-    "台北": "臺北市", "臺北": "臺北市", "新北": "新北市", "桃園": "桃園市",
-    "台中": "臺中市", "臺中": "臺中市", "台南": "臺南市", "臺南": "臺南市",
-    "高雄": "高雄市", "基隆": "基隆市", "新竹": "新竹市", "苗栗": "苗栗縣",
-    "彰化": "彰化縣", "南投": "南投縣", "雲林": "雲林縣", "嘉義": "嘉義市",
-    "屏東": "屏東縣", "宜蘭": "宜蘭縣", "花蓮": "花蓮縣", "台東": "臺東縣",
-    "臺東": "臺東縣", "澎湖": "澎湖縣", "金門": "金門縣", "連江": "連江縣",
-    "馬祖": "連江縣", "北部": "北部地區", "中部": "中部地區", "南部": "南部地區",
+    "台北市": "臺北市", "台北": "臺北市", "臺北市": "臺北市", "臺北": "臺北市",
+    "新北市": "新北市", "新北": "新北市",
+    "桃園市": "桃園市", "桃園": "桃園市",
+    "台中市": "臺中市", "台中": "臺中市", "臺中市": "臺中市", "臺中": "臺中市",
+    "台南市": "臺南市", "台南": "臺南市", "臺南市": "臺南市", "臺南": "臺南市",
+    "高雄市": "高雄市", "高雄": "高雄市",
+    "基隆市": "基隆市", "基隆": "基隆市",
+    "新竹市": "新竹市", "新竹縣": "新竹縣", "新竹": "新竹市",
+    "苗栗縣": "苗栗縣", "苗栗": "苗栗縣",
+    "彰化縣": "彰化縣", "彰化": "彰化縣",
+    "南投縣": "南投縣", "南投": "南投縣",
+    "雲林縣": "雲林縣", "雲林": "雲林縣",
+    "嘉義市": "嘉義市", "嘉義縣": "嘉義縣", "嘉義": "嘉義市",
+    "屏東縣": "屏東縣", "屏東": "屏東縣",
+    "宜蘭縣": "宜蘭縣", "宜蘭": "宜蘭縣",
+    "花蓮縣": "花蓮縣", "花蓮": "花蓮縣",
+    "台東縣": "臺東縣", "台東": "臺東縣", "臺東縣": "臺東縣", "臺東": "臺東縣",
+    "澎湖縣": "澎湖縣", "澎湖": "澎湖縣",
+    "金門縣": "金門縣", "金門": "金門縣",
+    "連江縣": "連江縣", "連江": "連江縣", "馬祖": "連江縣",
+    "北部": "北部地區", "中部": "中部地區", "南部": "南部地區",
     "東北部": "東北部地區", "東部": "東部地區", "東南部": "東南部地區", "離島": "離島地區"
 }
+
+
+def filter_stations_by_region(stations: list, region_name: str) -> list:
+    """
+    依縣市或分區精準過濾測站。
+    1. 優先比對 county_name（正體臺與台相容）
+    2. 次要比對 station_name（正體臺與台相容）
+    """
+    if not region_name or not stations:
+        return stations
+    norm_reg = region_name.replace("臺", "台")
+    pure_name = norm_reg.replace("市", "").replace("縣", "").replace("地區", "")
+
+    # 1. 優先精準比對 county_name
+    c_matches = []
+    for s in stations:
+        c_name = (s.get("county_name") or "").replace("臺", "台")
+        if pure_name and pure_name in c_name:
+            c_matches.append(s)
+    if c_matches:
+        return c_matches
+
+    # 2. 次要比對 station_name
+    s_matches = []
+    for s in stations:
+        s_name = (s.get("station_name") or "").replace("臺", "台")
+        if pure_name and pure_name in s_name:
+            s_matches.append(s)
+    if s_matches:
+        return s_matches
+
+    return stations
 
 # ── Flask & LINE SDK 初始化 ───────────────────────────────────────────────────
 app     = Flask(__name__)
@@ -125,11 +176,11 @@ def handle_message(event: MessageEvent):
 
     reply_messages = []
 
-    # 檢查是否指定特定縣市
+    # 檢查是否指定特定縣市 (長詞優先比對)
     matched_region = None
-    for kw, reg in COUNTY_MAP.items():
+    for kw in sorted(COUNTY_MAP.keys(), key=lambda x: -len(x)):
         if kw in user_text:
-            matched_region = reg
+            matched_region = COUNTY_MAP[kw]
             break
 
     # 1. 穿搭、雨具、風速、降雨機率或帶傘判斷
@@ -232,11 +283,9 @@ def handle_message(event: MessageEvent):
                         logger.debug(f"[Bot] 寫入暫存 DB 失敗 (可安全忽略): {we}")
 
             if stations:
-                # 若使用者指定縣市，過濾該縣市測站
+                # 若使用者指定縣市，精準過濾該縣市測站
                 if matched_region:
-                    matched_kw = [k for k, v in COUNTY_MAP.items() if v == matched_region][0]
-                    reg_stations = [s for s in stations if matched_kw in s.get("station_name", "")]
-                    target_pool = reg_stations if reg_stations else stations
+                    target_pool = filter_stations_by_region(stations, matched_region)
                 else:
                     target_pool = stations
 

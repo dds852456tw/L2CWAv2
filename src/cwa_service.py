@@ -136,6 +136,8 @@ def parse_station_record(station: dict) -> Optional[dict]:
             precip = 0.0
             
         weather_desc = str(weather_elem.get("Weather", "") or "")
+        county_name = str(geo_info.get("CountyName", "") or "")
+        town_name = str(geo_info.get("TownName", "") or "")
 
         return {
             "station_id":        station.get("StationId", "UNKNOWN"),
@@ -148,6 +150,8 @@ def parse_station_record(station: dict) -> Optional[dict]:
             "relative_humidity": humidity if humidity != -99 else 0.0,
             "precipitation":     precip,
             "weather_desc":      weather_desc,
+            "county_name":       county_name,
+            "town_name":         town_name,
             "obs_time":          obs_time_raw,
             "fetched_at":        datetime.utcnow().isoformat() + "Z",
         }

@@ -28,6 +28,16 @@ def _temp_label(temp: float) -> str:
         return "🔵 涼爽"
 
 
+DEFAULT_PUBLIC_MAP_URL = "https://dds852456tw.github.io/L2CWAv2/"
+
+
+def _sanitize_map_url(url: Optional[str]) -> str:
+    """確保地圖連結永遠是公開可存取網址，防止 localhost 出現在 LINE 訊息按鈕。"""
+    if not url or "localhost" in url or "127.0.0.1" in url or "0.0.0.0" in url:
+        return DEFAULT_PUBLIC_MAP_URL
+    return url
+
+
 def create_weather_flex(
     station_name: str,
     temperature: float,
@@ -52,6 +62,7 @@ def create_weather_flex(
     """
     color = _temp_color(temperature)
     label = _temp_label(temperature)
+    valid_map_url = _sanitize_map_url(map_url)
 
     bubble = {
         "type": "bubble",
@@ -152,7 +163,7 @@ def create_weather_flex(
                     "action": {
                         "type": "uri",
                         "label": "🗺 查看即時地圖",
-                        "uri": map_url or "https://opendata.cwa.gov.tw",
+                        "uri": valid_map_url,
                     },
                     "style": "primary",
                     "color": "#E94560",
@@ -169,7 +180,7 @@ def create_weather_flex(
     }
 
 
-def create_map_flex(map_url: str) -> dict:
+def create_map_flex(map_url: Optional[str] = None) -> dict:
     """
     建立「即時地圖」快捷 Flex Message。
 
@@ -179,6 +190,7 @@ def create_map_flex(map_url: str) -> dict:
     Returns:
         dict: LINE Flex Message JSON payload
     """
+    valid_map_url = _sanitize_map_url(map_url)
     return {
         "type": "flex",
         "altText": "🗺 台灣即時天氣地圖 - 點擊查看",
@@ -219,7 +231,7 @@ def create_map_flex(map_url: str) -> dict:
                         "action": {
                             "type": "uri",
                             "label": "開啟地圖",
-                            "uri": map_url,
+                            "uri": valid_map_url,
                         },
                         "style": "primary",
                         "color": "#E94560",

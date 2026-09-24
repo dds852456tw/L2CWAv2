@@ -64,7 +64,9 @@ CREATE TABLE IF NOT EXISTS realtime_weather (
     air_temperature   REAL    NOT NULL,
     obs_time          TEXT    NOT NULL,
     fetched_at        TEXT    NOT NULL,
-    updated_at        TEXT    NOT NULL
+    updated_at        TEXT    NOT NULL,
+    county_name       TEXT    DEFAULT '',
+    town_name         TEXT    DEFAULT ''
 );
 """
 
@@ -134,14 +136,16 @@ def init_db() -> None:
             conn.execute(CREATE_FORECAST_TABLE_SQL)
             conn.executescript(CREATE_FORECAST_INDEX_SQL)
 
-            # 動態補足 realtime_weather 擴充欄位（風速、風向、濕度、雨量、天氣描述）
+            # 動態補足 realtime_weather 擴充欄位（風速、風向、濕度、雨量、天氣描述、縣市、鄉鎮）
             existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(realtime_weather)").fetchall()}
             new_cols = {
                 "wind_speed": "REAL DEFAULT 0.0",
                 "wind_direction": "REAL DEFAULT 0.0",
                 "relative_humidity": "REAL DEFAULT 0.0",
                 "precipitation": "REAL DEFAULT 0.0",
-                "weather_desc": "TEXT DEFAULT ''"
+                "weather_desc": "TEXT DEFAULT ''",
+                "county_name": "TEXT DEFAULT ''",
+                "town_name": "TEXT DEFAULT ''"
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in existing_cols:
@@ -178,11 +182,13 @@ UPSERT_SQL = """
 INSERT INTO realtime_weather
     (station_id, station_name, latitude, longitude,
      air_temperature, obs_time, fetched_at, updated_at,
-     wind_speed, wind_direction, relative_humidity, precipitation, weather_desc)
+     wind_speed, wind_direction, relative_humidity, precipitation, weather_desc,
+     county_name, town_name)
 VALUES
     (:station_id, :station_name, :latitude, :longitude,
      :air_temperature, :obs_time, :fetched_at, :updated_at,
-     :wind_speed, :wind_direction, :relative_humidity, :precipitation, :weather_desc)
+     :wind_speed, :wind_direction, :relative_humidity, :precipitation, :weather_desc,
+     :county_name, :town_name)
 ON CONFLICT(station_id) DO UPDATE SET
     station_name      = excluded.station_name,
     latitude          = excluded.latitude,
@@ -195,7 +201,9 @@ ON CONFLICT(station_id) DO UPDATE SET
     wind_direction    = excluded.wind_direction,
     relative_humidity = excluded.relative_humidity,
     precipitation     = excluded.precipitation,
-    weather_desc      = excluded.weather_desc;
+    weather_desc      = excluded.weather_desc,
+    county_name       = excluded.county_name,
+    town_name         = excluded.town_name;
 """
 
 
@@ -224,6 +232,8 @@ def upsert_records(records: list) -> int:
             "relative_humidity": r.get("relative_humidity", 0.0),
             "precipitation":     r.get("precipitation", 0.0),
             "weather_desc":      r.get("weather_desc", ""),
+            "county_name":       r.get("county_name", ""),
+            "town_name":         r.get("town_name", ""),
         })
 
     try:
