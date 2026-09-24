@@ -156,12 +156,22 @@ def handle_message(event: MessageEvent):
                     f_rows = all_forecasts[:7]
 
             if f_rows:
-                today_f = f_rows[0]
-                min_t = today_f.get("min_t") or today_f.get("minT") or 22.0
-                max_t = today_f.get("max_t") or today_f.get("maxT") or 30.0
-                pop = today_f.get("pop", 0.0)
-                ws = today_f.get("wind_speed", 2.0)
-                wx = today_f.get("weather_desc", "多雲到晴")
+                from datetime import datetime
+                today_str = datetime.now().strftime("%Y-%m-%d")
+                future_rows = [r for r in f_rows if (r.get("data_date") or r.get("dataDate", "")) >= today_str]
+                today_f = future_rows[0] if future_rows else f_rows[0]
+
+                min_t = float(today_f.get("min_t") or today_f.get("minT") or 22.0)
+                max_t = float(today_f.get("max_t") or today_f.get("maxT") or 30.0)
+                pop = float(today_f.get("pop", 0.0) or 0.0)
+                ws = float(today_f.get("wind_speed", 2.0) or 2.0)
+                wx = str(today_f.get("weather_desc", "多雲到晴") or "多雲到晴")
+
+                # 防呆校正：若天氣現象含雨但機率為 0%，校正至合理值；風速保障常態基準
+                if "雨" in wx and pop < 30.0:
+                    pop = 40.0
+                if ws <= 0.0:
+                    ws = 2.0
 
                 advice = get_clothing_advice(min_t, max_t, pop=pop, wind_speed=ws, weather_desc=wx)
 

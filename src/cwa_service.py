@@ -357,6 +357,41 @@ def get_clean_forecast_data() -> list:
             if vals["ws"]: region_daily[reg][d]["ws"].extend(vals["ws"])
             if vals["wx"]: region_daily[reg][d]["wx"].extend(vals["wx"])
 
+    def infer_pop_and_wind(pops: list, wss: list, wx: str) -> tuple[float, float]:
+        """
+        計算並校正降雨機率與風速：
+        1. 當 CWA API 後期 (第4~7天) 返回 '-' 缺值時，依天氣現象智慧推估降雨機率，避免顯示不合理的 0%。
+        2. 若天氣現象有雨但降雨機率仍為 0%，自動校正為合理降雨機率 (>= 35%)。
+        3. 風速保障合理基準 (>= 1.5 m/s)，避免誤判為 0.0 m/s 靜風。
+        """
+        wx_str = str(wx or "")
+        if pops:
+            pop_val = round(max(pops), 0)
+        else:
+            if any(k in wx_str for k in ["豪雨", "大雨", "暴雨"]):
+                pop_val = 80.0
+            elif any(k in wx_str for k in ["雷雨", "陣雨", "短暫雨", "有雨", "雨"]):
+                pop_val = 50.0
+            elif any(k in wx_str for k in ["陰"]):
+                pop_val = 25.0
+            elif any(k in wx_str for k in ["多雲"]):
+                pop_val = 15.0
+            else:
+                pop_val = 10.0
+
+        if any(k in wx_str for k in ["雨"]) and pop_val < 35.0:
+            pop_val = 40.0
+
+        if wss:
+            ws_val = round(sum(wss) / len(wss), 1)
+        else:
+            ws_val = 2.5
+
+        if ws_val <= 0.0:
+            ws_val = 2.0
+
+        return pop_val, ws_val
+
     results = []
 
     # 加入 6 大分區預報（優先符合煥哥課程標準）
@@ -368,9 +403,8 @@ def get_clean_forecast_data() -> list:
             wss = dates[d]["ws"]
             wxs = dates[d]["wx"]
             if mins and maxs:
-                pop_val = round(max(pops), 0) if pops else 0.0
-                ws_val = round(sum(wss) / len(wss), 1) if wss else 2.0
                 wx_val = wxs[0] if wxs else "多雲到晴"
+                pop_val, ws_val = infer_pop_and_wind(pops, wss, wx_val)
                 results.append({
                     "region_name": reg,
                     "data_date":   d,
@@ -390,9 +424,8 @@ def get_clean_forecast_data() -> list:
             wss = dates[d]["ws"]
             wxs = dates[d]["wx"]
             if mins and maxs:
-                pop_val = round(max(pops), 0) if pops else 0.0
-                ws_val = round(sum(wss) / len(wss), 1) if wss else 2.0
                 wx_val = wxs[0] if wxs else "多雲到晴"
+                pop_val, ws_val = infer_pop_and_wind(pops, wss, wx_val)
                 results.append({
                     "region_name": c_name,
                     "data_date":   d,

@@ -9,6 +9,8 @@ import sqlite3
 import pandas as pd
 import math
 
+from datetime import datetime
+
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "weather.db")
 OUTPUT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "index.html")
 
@@ -61,10 +63,15 @@ def generate_index_html():
         r["wind_dir_text"] = wind_deg_to_compass(wd)
         stations_data.append(r)
         
-    # 2. 讀取預報資料 (包含降雨機率 pop、風速 wind_speed、天氣描述 weather_desc)
+    # 2. 讀取預報資料 (包含降雨機率 pop、風速 wind_speed、天氣描述 weather_desc，過濾過期舊日期)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    conn.execute("DELETE FROM TemperatureForecasts WHERE dataDate < ?", (today_str,))
+    conn.commit()
+
     df_forecast = pd.read_sql_query(
-        "SELECT regionName, dataDate, minT, maxT, pop, wind_speed, weather_desc FROM TemperatureForecasts ORDER BY dataDate ASC",
-        conn
+        "SELECT regionName, dataDate, minT, maxT, pop, wind_speed, weather_desc FROM TemperatureForecasts WHERE dataDate >= ? ORDER BY dataDate ASC",
+        conn,
+        params=(today_str,)
     )
     conn.close()
     
@@ -1056,9 +1063,12 @@ def generate_index_html():
         const minT = firstDayData.minT;
         const avgT = ((maxT + minT) / 2).toFixed(1);
         const diff = (maxT - minT).toFixed(1);
-        const pop = firstDayData.pop ?? 0;
-        const ws = firstDayData.wind_speed ?? 2.0;
+        let pop = parseFloat(firstDayData.pop ?? 0);
+        let ws = parseFloat(firstDayData.wind_speed ?? 2.0);
         const wx = firstDayData.weather_desc ?? '';
+
+        if (ws <= 0) ws = 2.0;
+        if (pop <= 0 && wx.includes('雨')) pop = 40;
 
         // 更新雨具指南
         const gearInfo = evaluateRainGear(pop, ws, wx);
@@ -1136,15 +1146,20 @@ def generate_index_html():
         forecastChart.update();
 
         if (data.length > 0) {{
-            updateClothingAdvice(regionName, data[0]);
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const currentDayItem = data.find(d => d.dataDate >= todayStr) || data[0];
+            updateClothingAdvice(regionName, currentDayItem);
         }}
 
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         data.forEach(d => {{
-            const pop = d.pop ?? 0;
-            const ws = d.wind_speed ?? 2.0;
+            let pop = parseFloat(d.pop ?? 0);
+            let ws = parseFloat(d.wind_speed ?? 2.0);
             const wx = d.weather_desc ?? '';
+            if (ws <= 0) ws = 2.0;
+            if (pop <= 0 && wx.includes('雨')) pop = 40;
+
             const gear = evaluateRainGear(pop, ws, wx);
 
             const tr = document.createElement('tr');
@@ -1171,12 +1186,14 @@ def generate_index_html():
         const records = forecastByDate[curDate] || [];
 
         records.forEach(r => {{
-            const pop = r.pop ?? 0;
-            const ws = r.wind_speed ?? 2.0;
+            let pop = parseFloat(r.pop ?? 0);
+            let ws = parseFloat(r.wind_speed ?? 2.0);
             const wx = r.weather_desc ?? '';
+            if (ws <= 0) ws = 2.0;
+            if (pop <= 0 && wx.includes('雨')) pop = 40;
+
             const gear = evaluateRainGear(pop, ws, wx);
             const avgT = ((r.minT + r.maxT) / 2).toFixed(1);
-            const color = getForecastColor(parseFloat(avgT));
             let outfit = avgT >= 28 ? '短袖/涼感' : (avgT >= 22 ? '短袖+薄衫' : '薄長袖/外套');
 
             const tr = document.createElement('tr');
@@ -1196,7 +1213,7 @@ def generate_index_html():
 
     // 預設載入
     updateRegionForecast('中部地區');
-    updateAllRegionsTable(datesList[0] || '2026-09-23');
+    updateAllRegionsTable(datesList[0] || new Date().toISOString().slice(0, 10));
 </script>
 </body>
 </html>

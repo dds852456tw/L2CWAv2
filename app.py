@@ -16,6 +16,7 @@ import folium
 import altair as alt
 import pandas as pd
 import streamlit as st
+from datetime import datetime
 from streamlit_folium import st_folium
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -715,10 +716,20 @@ with tab_forecast:
             df_region["日期簡稱"] = df_region["dataDate"].apply(lambda x: x[5:])
 
             # 👔 智慧生活穿著與外出裝備建議（結合風速與降雨機率）
-            today_row = df_region.iloc[0]
-            t_pop = today_row.get("pop", 0.0) if "pop" in today_row else 0.0
-            t_ws = today_row.get("wind_speed", 2.0) if "wind_speed" in today_row else 2.0
-            t_wx = today_row.get("weather_desc", "") if "weather_desc" in today_row else ""
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            valid_rows = df_region[df_region["dataDate"] >= today_str]
+            today_row = valid_rows.iloc[0] if not valid_rows.empty else df_region.iloc[0]
+
+            t_pop = float(today_row.get("pop", 0.0) if "pop" in today_row else 0.0)
+            t_ws = float(today_row.get("wind_speed", 2.0) if "wind_speed" in today_row else 2.0)
+            t_wx = str(today_row.get("weather_desc", "") if "weather_desc" in today_row else "")
+
+            # 防呆校正：若天氣現象含雨但機率為 0%，校正至合理值；風速保障常態基準
+            if "雨" in t_wx and t_pop < 30.0:
+                t_pop = 40.0
+            if t_ws <= 0.0:
+                t_ws = 2.0
+
             advice = get_clothing_advice(today_row["minT"], today_row["maxT"], pop=t_pop, wind_speed=t_ws, weather_desc=t_wx)
             gear = get_rain_gear_advice(t_pop, t_ws, t_wx)
 

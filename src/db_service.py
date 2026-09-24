@@ -164,6 +164,9 @@ def init_db() -> None:
                     except Exception:
                         pass
 
+            # 自動清理過期的過往預報，避免舊資料殘留 0 數值
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            conn.execute("DELETE FROM TemperatureForecasts WHERE dataDate < ?", (today_str,))
             conn.commit()
         logger.info(f"[DB] 資料庫初始化完成: {get_db_path()}")
     except Exception as e:
@@ -278,6 +281,9 @@ def upsert_forecast_records(records: list) -> int:
 
     try:
         with get_connection(read_only=False) as conn:
+            # 清理過期預報
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            conn.execute("DELETE FROM TemperatureForecasts WHERE dataDate < ?", (today_str,))
             try:
                 conn.executemany(UPSERT_FORECAST_SQL, rows)
             except sqlite3.OperationalError:
@@ -356,12 +362,18 @@ def get_forecast_regions() -> list:
 
 
 def get_forecast_dates() -> list:
-    """取得預報涵蓋的日期清單 (供 Select Date 使用)。"""
+    """取得預報涵蓋的日期清單 (供 Select Date 使用，自動過濾過期日期)。"""
     try:
+        today_str = datetime.now().strftime("%Y-%m-%d")
         with get_connection(read_only=True) as conn:
             rows = conn.execute(
-                "SELECT DISTINCT dataDate FROM TemperatureForecasts ORDER BY dataDate ASC"
+                "SELECT DISTINCT dataDate FROM TemperatureForecasts WHERE dataDate >= ? ORDER BY dataDate ASC",
+                (today_str,)
             ).fetchall()
+            if not rows:
+                rows = conn.execute(
+                    "SELECT DISTINCT dataDate FROM TemperatureForecasts ORDER BY dataDate ASC"
+                ).fetchall()
             return [r[0] for r in rows]
     except Exception as e:
         logger.debug(f"[DB] get_forecast_dates 異常: {e}")
@@ -370,15 +382,21 @@ def get_forecast_dates() -> list:
 
 def get_forecast_by_region(region_name: str) -> list:
     """
-    依地區名稱查詢一週氣溫預報（供折線圖與表格使用）。
+    依地區名稱查詢一週氣溫預報（供折線圖與表格使用，優先過濾已過期之歷史舊日期）。
     符合 SQL: SELECT * FROM TemperatureForecasts WHERE regionName = "中部地區";
     """
     try:
+        today_str = datetime.now().strftime("%Y-%m-%d")
         with get_connection(read_only=True) as conn:
             rows = conn.execute(
-                "SELECT * FROM TemperatureForecasts WHERE regionName = ? ORDER BY dataDate ASC",
-                (region_name,)
+                "SELECT * FROM TemperatureForecasts WHERE regionName = ? AND dataDate >= ? ORDER BY dataDate ASC",
+                (region_name, today_str)
             ).fetchall()
+            if not rows:
+                rows = conn.execute(
+                    "SELECT * FROM TemperatureForecasts WHERE regionName = ? ORDER BY dataDate ASC",
+                    (region_name,)
+                ).fetchall()
             return [dict(r) for r in rows]
     except Exception as e:
         logger.debug(f"[DB] get_forecast_by_region 異常: {e}")
